@@ -1,0 +1,51 @@
+body {
+    font-family: 'Instrument Serif', serif;
+    margin: 0;
+    padding: 0;
+}
+
+h2 {
+  font-family: 'Instrument Serif', serif;
+}
+
+.container {
+    width: 400px;
+    margin-left: 50px;
+}
+
+.text-block {
+  padding-top: 11px;
+}
+
+ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+a {
+  text-decoration-style: dotted;
+  color: black;
+}
+
+a:hover {
+  background-color: gray;
+}
+
+#last-updated {
+    position: fixed;
+    bottom: 0;
+    margin-left: 50px;
+}
+
+@media only screen and (max-width: 1050px) {
+  html, body {
+      width: 100%;
+      max-width: 100%;
+      overflow-y: hidden;
+  }
+  .container {
+      width: 77%;
+      max-width: 100%;
+      margin: auto;
+  }
+}
