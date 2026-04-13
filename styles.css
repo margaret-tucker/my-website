@@ -66,6 +66,12 @@ a:hover {
   transition: opacity 0.2s;
 }
 
+.social-icons svg {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+}
+
 .social-icons a:hover {
   opacity: 0.5;
 }
