@@ -38,9 +38,9 @@
     }
     .inspo-board {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 12px;
-      margin-top: 10px;
+      margin-top: 16px;
     }
     .inspo-card {
       border: 1px solid #ccc;
@@ -52,6 +52,7 @@
     .inspo-card img {
       max-width: 100%;
       border-radius: 2px;
+      display: block;
     }
     .inspo-card .delete-card {
       position: absolute;
@@ -71,6 +72,7 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: center;
     }
     .add-inspo input, .add-inspo select {
       font-family: 'Instrument Serif', serif;
@@ -79,7 +81,7 @@
       border: 1px solid #ccc;
       border-radius: 4px;
     }
-    .add-inspo input { flex: 1; min-width: 200px; }
+    .add-inspo input[type="text"] { flex: 1; min-width: 200px; }
     .add-inspo button {
       font-family: 'Instrument Serif', serif;
       font-size: 15px;
@@ -90,6 +92,30 @@
       cursor: pointer;
     }
     .add-inspo button:hover { background: #eee; }
+    .upload-row {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .upload-row label {
+      font-family: 'Instrument Serif', serif;
+      font-size: 15px;
+      padding: 6px 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      display: inline-block;
+    }
+    .upload-row label:hover { background: #eee; }
+    .upload-row input[type="file"] { display: none; }
+    .upload-status {
+      font-size: 13px;
+      color: gray;
+      margin-top: 4px;
+    }
     section { margin-bottom: 40px; }
   </style>
 </head>
@@ -109,6 +135,7 @@
     <section>
       <h2>Inspiration Board</h2>
       <p>Collect quotes, links, and images.</p>
+
       <div class="add-inspo">
         <select id="inspo-type">
           <option value="text">Quote / Text</option>
@@ -118,6 +145,13 @@
         <input type="text" id="inspo-input" placeholder="Type or paste here...">
         <button onclick="addInspo()">Add</button>
       </div>
+
+      <div class="upload-row">
+        <label for="file-upload">Upload Image</label>
+        <input type="file" id="file-upload" accept="image/*" onchange="uploadImage(this)">
+        <span class="upload-status" id="upload-status"></span>
+      </div>
+
       <div class="inspo-board" id="inspo-board"></div>
     </section>
 
@@ -135,20 +169,19 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-
-    var SUPABASE_URL = 'https://djixnpdymicnoafnjceo.supabase.co'
+    var SUPABASE_URL = 'https://djixnpdymicnoafnjceo.supabase.co';
     var SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqaXhucGR5bWljbm9hZm5qY2VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwMzA4NTEsImV4cCI6MjA5MTYwNjg1MX0.fgNriKs_SFtbqy7_KNKcTD-T6h7TYu88YV_npxSpjHw';
+    var STORAGE_BUCKET = 'inspiration-images';
 
-    var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     // --- NOTES ---
     var notesEl = document.getElementById('notes');
     var savedMsg = document.getElementById('saved-msg');
     var saveTimeout;
 
-    // Load notes on page load
     async function loadNotes() {
-      var { data } = await supabase
+      var { data } = await sb
         .from('notes')
         .select('content')
         .eq('type', 'main')
@@ -159,11 +192,9 @@
       }
     }
 
-    // Save notes (upsert)
     async function saveNotes() {
-      // Delete old, insert new (simple approach)
-      await supabase.from('notes').delete().eq('type', 'main');
-      await supabase.from('notes').insert({ content: notesEl.value, type: 'main' });
+      await sb.from('notes').delete().eq('type', 'main');
+      await sb.from('notes').insert({ content: notesEl.value, type: 'main' });
       savedMsg.textContent = 'Saved ✓';
       setTimeout(function() { savedMsg.textContent = ''; }, 1500);
     }
@@ -173,15 +204,16 @@
       saveTimeout = setTimeout(saveNotes, 1000);
     });
 
-    // --- INSPIRATION BOARD ---
+    // --- HELPERS ---
     function escapeHtml(str) {
       var div = document.createElement('div');
       div.appendChild(document.createTextNode(str));
       return div.innerHTML;
     }
 
+    // --- INSPIRATION BOARD ---
     async function loadInspo() {
-      var { data } = await supabase
+      var { data } = await sb
         .from('inspiration')
         .select('*')
         .order('created_at', { ascending: true });
@@ -211,13 +243,45 @@
       var input = document.getElementById('inspo-input');
       var value = input.value.trim();
       if (!value) return;
-      await supabase.from('inspiration').insert({ type: type, value: value });
+      await sb.from('inspiration').insert({ type: type, value: value });
       input.value = '';
       loadInspo();
     }
 
     async function removeInspo(id) {
-      await supabase.from('inspiration').delete().eq('id', id);
+      await sb.from('inspiration').delete().eq('id', id);
+      loadInspo();
+    }
+
+    // --- IMAGE UPLOAD ---
+    async function uploadImage(inputEl) {
+      var file = inputEl.files[0];
+      if (!file) return;
+
+      var status = document.getElementById('upload-status');
+      status.textContent = 'Uploading...';
+
+      var ext = file.name.split('.').pop();
+      var fileName = Date.now() + '-' + Math.random().toString(36).substring(2, 8) + '.' + ext;
+
+      var { data, error } = await sb.storage
+        .from(STORAGE_BUCKET)
+        .upload(fileName, file, { contentType: file.type });
+
+      if (error) {
+        status.textContent = 'Upload failed: ' + error.message;
+        return;
+      }
+
+      var { data: urlData } = sb.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(fileName);
+
+      await sb.from('inspiration').insert({ type: 'image', value: urlData.publicUrl });
+
+      status.textContent = 'Uploaded ✓';
+      setTimeout(function() { status.textContent = ''; }, 2000);
+      inputEl.value = '';
       loadInspo();
     }
 
