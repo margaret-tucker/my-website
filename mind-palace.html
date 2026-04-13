@@ -19,20 +19,213 @@
       height: 80vh;
       border: none;
     }
+    .notes-area {
+      width: 100%;
+      min-height: 200px;
+      font-family: 'Instrument Serif', serif;
+      font-size: 16px;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      resize: vertical;
+      box-sizing: border-box;
+      margin-top: 10px;
+    }
+    .saved-msg {
+      font-size: 13px;
+      color: gray;
+      margin-top: 4px;
+    }
+    .inspo-board {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .inspo-card {
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 12px;
+      position: relative;
+      word-wrap: break-word;
+    }
+    .inspo-card img {
+      max-width: 100%;
+      border-radius: 2px;
+    }
+    .inspo-card .delete-card {
+      position: absolute;
+      top: 4px;
+      right: 8px;
+      cursor: pointer;
+      color: gray;
+      font-size: 16px;
+      background: none;
+      border: none;
+    }
+    .inspo-card .delete-card:hover {
+      color: black;
+    }
+    .add-inspo {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .add-inspo input, .add-inspo select {
+      font-family: 'Instrument Serif', serif;
+      font-size: 15px;
+      padding: 6px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .add-inspo input { flex: 1; min-width: 200px; }
+    .add-inspo button {
+      font-family: 'Instrument Serif', serif;
+      font-size: 15px;
+      padding: 6px 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+    }
+    .add-inspo button:hover { background: #eee; }
+    section { margin-bottom: 40px; }
   </style>
 </head>
 <body>
   <main class="container">
     <h1>Mind Palace</h1>
-    <p>A space for sketching, brainstorming, and thinking out loud.</p>
-    <div class="whiteboard-container">
-      <iframe
-        src="https://excalidraw.com"
-        allowfullscreen>
-      </iframe>
-    </div>
-    <br>
+
+    <!-- NOTES -->
+    <section>
+      <h2>Notes</h2>
+      <p>A place to jot things down. Saves to the cloud.</p>
+      <textarea class="notes-area" id="notes" placeholder="Start typing..."></textarea>
+      <div class="saved-msg" id="saved-msg"></div>
+    </section>
+
+    <!-- INSPIRATION BOARD -->
+    <section>
+      <h2>Inspiration Board</h2>
+      <p>Collect quotes, links, and images.</p>
+      <div class="add-inspo">
+        <select id="inspo-type">
+          <option value="text">Quote / Text</option>
+          <option value="link">Link</option>
+          <option value="image">Image URL</option>
+        </select>
+        <input type="text" id="inspo-input" placeholder="Type or paste here...">
+        <button onclick="addInspo()">Add</button>
+      </div>
+      <div class="inspo-board" id="inspo-board"></div>
+    </section>
+
+    <!-- WHITEBOARD -->
+    <section>
+      <h2>Whiteboard</h2>
+      <p>A space for sketching and brainstorming.</p>
+      <div class="whiteboard-container">
+        <iframe src="https://excalidraw.com" allowfullscreen></iframe>
+      </div>
+    </section>
+
     <a href="index.html">← Back to Home</a>
   </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // =============================================
+    // REPLACE THESE WITH YOUR SUPABASE CREDENTIALS
+    // =============================================
+    var SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+    var SUPABASE_KEY = 'YOUR_ANON_KEY';
+
+    var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // --- NOTES ---
+    var notesEl = document.getElementById('notes');
+    var savedMsg = document.getElementById('saved-msg');
+    var saveTimeout;
+
+    // Load notes on page load
+    async function loadNotes() {
+      var { data } = await supabase
+        .from('notes')
+        .select('content')
+        .eq('type', 'main')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (data && data.length > 0) {
+        notesEl.value = data[0].content;
+      }
+    }
+
+    // Save notes (upsert)
+    async function saveNotes() {
+      // Delete old, insert new (simple approach)
+      await supabase.from('notes').delete().eq('type', 'main');
+      await supabase.from('notes').insert({ content: notesEl.value, type: 'main' });
+      savedMsg.textContent = 'Saved ✓';
+      setTimeout(function() { savedMsg.textContent = ''; }, 1500);
+    }
+
+    notesEl.addEventListener('input', function() {
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(saveNotes, 1000);
+    });
+
+    // --- INSPIRATION BOARD ---
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
+    }
+
+    async function loadInspo() {
+      var { data } = await supabase
+        .from('inspiration')
+        .select('*')
+        .order('created_at', { ascending: true });
+      renderInspo(data || []);
+    }
+
+    function renderInspo(items) {
+      var board = document.getElementById('inspo-board');
+      board.innerHTML = '';
+      items.forEach(function(item) {
+        var card = document.createElement('div');
+        card.className = 'inspo-card';
+        var del = '<button class="delete-card" onclick="removeInspo(' + item.id + ')">&times;</button>';
+        if (item.type === 'image') {
+          card.innerHTML = del + '<img src="' + escapeHtml(item.value) + '" alt="inspiration">';
+        } else if (item.type === 'link') {
+          card.innerHTML = del + '<a href="' + escapeHtml(item.value) + '" target="_blank" rel="noopener">' + escapeHtml(item.value) + '</a>';
+        } else {
+          card.innerHTML = del + '<p>' + escapeHtml(item.value) + '</p>';
+        }
+        board.appendChild(card);
+      });
+    }
+
+    async function addInspo() {
+      var type = document.getElementById('inspo-type').value;
+      var input = document.getElementById('inspo-input');
+      var value = input.value.trim();
+      if (!value) return;
+      await supabase.from('inspiration').insert({ type: type, value: value });
+      input.value = '';
+      loadInspo();
+    }
+
+    async function removeInspo(id) {
+      await supabase.from('inspiration').delete().eq('id', id);
+      loadInspo();
+    }
+
+    // --- INIT ---
+    loadNotes();
+    loadInspo();
+  </script>
 </body>
 </html>
