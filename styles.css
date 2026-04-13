@@ -13,7 +13,7 @@ h2 {
 }
 
 .container {
-    width: 900px;
+    max-width: 900px;
     margin-left: 50px;
 }
 
